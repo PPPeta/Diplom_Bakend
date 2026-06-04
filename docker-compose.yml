@@ -1,0 +1,70 @@
+services:
+  core-db:
+    image: postgres:16-alpine
+    container_name: vp_core_db
+    environment:
+      POSTGRES_USER: ${CORE_DB_USER:-core_user}
+      POSTGRES_PASSWORD: ${CORE_DB_PASSWORD:-core_pass}
+      POSTGRES_DB: ${CORE_DB_NAME:-core_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - core_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CORE_DB_USER:-core_user} -d ${CORE_DB_NAME:-core_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  analytics-db:
+    image: postgres:16-alpine
+    container_name: vp_analytics_db
+    environment:
+      POSTGRES_USER: ${ANALYTICS_DB_USER:-analytics_user}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_pass}
+      POSTGRES_DB: ${ANALYTICS_DB_NAME:-analytics_db}
+    ports:
+      - "5434:5432"
+    volumes:
+      - analytics_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ANALYTICS_DB_USER:-analytics_user} -d ${ANALYTICS_DB_NAME:-analytics_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: vp_api
+    env_file: .env
+    environment:
+      CORE_DB_HOST: core-db
+      ANALYTICS_DB_HOST: analytics-db
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    depends_on:
+      core-db:
+        condition: service_healthy
+      analytics-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  core_db_data:
+  analytics_db_data:
+  redis_data:
