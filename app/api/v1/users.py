@@ -1,0 +1,73 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import require_roles
+from app.db.session import get_core_session
+from app.models.user import User
+from app.schemas.user import UserAdminUpdate, UserRead
+from app.services import user_service
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+DbDep = Annotated[AsyncSession, Depends(get_core_session)]
+AdminDep = Annotated[User, Depends(require_roles("admin"))]
+
+
+def _read(u: User) -> UserRead:
+    return UserRead(
+        id=u.id,
+        email=u.email,
+        full_name=u.full_name,
+        phone=getattr(u, "phone", None),
+        role=u.role.code if u.role else "",
+        partner_id=u.partner_id,
+        is_active=u.is_active,
+    )
+
+
+@router.get("", response_model=list[UserRead])
+async def list_users(
+    db: DbDep,
+    _: AdminDep,
+    role: str | None = None,
+    partner_id: int | None = None,
+) -> list[UserRead]:
+    users = await user_service.list_users(db, role=role, partner_id=partner_id)
+    return [_read(u) for u in users]
+
+
+@router.get("/{user_id}", response_model=UserRead)
+async def get_user(user_id: int, db: DbDep, _: AdminDep) -> UserRead:
+    user = await user_service.get_user(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    return _read(user)
+
+
+@router.patch("/{user_id}", response_model=UserRead)
+async def update_user(
+    user_id: int, data: UserAdminUpdate, db: DbDep, admin: AdminDep
+) -> UserRead:
+    user = await user_service.get_user(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    if user.id == admin.id and data.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="\u041d\u0435\u043b\u044c\u0437\u044f \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u0443\u044e \u0443\u0447\u0451\u0442\u043d\u0443\u044e \u0437\u0430\u043f\u0438\u0441\u044c",
+        )
+    try:
+        user = await user_service.admin_update(
+            db, user, is_active=data.is_active, role_code=data.role_code
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )
+    return _read(user)

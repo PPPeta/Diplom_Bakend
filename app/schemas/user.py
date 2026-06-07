@@ -33,3 +33,10 @@ class ProfileUpdate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class UserAdminUpdate(BaseModel):
+    """Administrative update of a user account."""
+
+    is_active: bool | None = None
+    role_code: str | None = None
