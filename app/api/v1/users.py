@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import require_roles
 from app.db.session import get_core_session
 from app.models.user import User
-from app.schemas.user import UserAdminUpdate, UserRead
+from app.schemas.user import UserAdminUpdate, UserCreate, UserRead
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -38,6 +38,25 @@ async def list_users(
     return [_read(u) for u in users]
 
 
+@router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def create_user(data: UserCreate, db: DbDep, _: AdminDep) -> UserRead:
+    try:
+        user = await user_service.create_user(
+            db,
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            phone=data.phone,
+            role_code=data.role_code,
+            partner_id=data.partner_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )
+    return _read(user)
+
+
 @router.get("/{user_id}", response_model=UserRead)
 async def get_user(user_id: int, db: DbDep, _: AdminDep) -> UserRead:
     user = await user_service.get_user(db, user_id)
@@ -60,7 +79,7 @@ async def update_user(
     if user.id == admin.id and data.is_active is False:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="\u041d\u0435\u043b\u044c\u0437\u044f \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u0443\u044e \u0443\u0447\u0451\u0442\u043d\u0443\u044e \u0437\u0430\u043f\u0438\u0441\u044c",
+            detail="Нельзя заблокировать собственную учётную запись",
         )
     try:
         user = await user_service.admin_update(

@@ -10,6 +10,7 @@ from app.api.v1 import (
     partners,
     payments,
     requests,
+    roles,
     services,
     tasks,
     users,
@@ -26,5 +27,6 @@ api_router.include_router(tasks.router)
 api_router.include_router(payments.router)
 api_router.include_router(documents.router)
 api_router.include_router(users.router)
+api_router.include_router(roles.router)
 api_router.include_router(partners.router)
 api_router.include_router(audit.router)
