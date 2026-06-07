@@ -51,25 +51,17 @@ async def list_orders(
 async def create_order(
     db: AsyncSession, data: OrderCreate, partner_id: int | None
 ) -> Order:
-    # Колонка number ограничена VARCHAR(32). Финальный номер вида
-    # ORD-2026-00001 короткий, но временный нужен только до получения id,
-    # поэтому берём короткий кусок uuid (tmp-xxxxxxxx = 12 символов).
-    order = Order(
-        client_ref=data.client_ref,
-        partner_id=partner_id,
-        manager_id=data.manager_id,
-        status="new",
-        number=f"tmp-{uuid.uuid4().hex[:8]}",
-        total_amount=Decimal("0.00"),
-    )
-    db.add(order)
-    await db.flush()  # assigns order.id
-
+    # Сначала считаем цены и собираем позиции, и только потом создаём заказ.
+    # Важно: позиции передаём сразу в конструктор Order(items=...),
+    # а не через order.items.append() после flush. Иначе обращение к
+    # ещё не загруженной связи items на уже сохранённом объекте в async-сессии
+    # запускает ленивую загрузку из БД и падает с MissingGreenlet.
     total = Decimal("0.00")
+    order_items: list[OrderItem] = []
     for item in data.items:
         price = await pricing_service.resolve_price(db, item.service_id, partner_id)
         line_sum = price * item.qty
-        order.items.append(
+        order_items.append(
             OrderItem(
                 service_id=item.service_id,
                 qty=item.qty,
@@ -79,7 +71,21 @@ async def create_order(
         )
         total += line_sum
 
-    order.total_amount = total
+    # Колонка number ограничена VARCHAR(32). Временный короткий номер нужен
+    # только до получения id (tmp-xxxxxxxx = 12 символов), потом заменяем
+    # на финальный ORD-YYYY-00001.
+    order = Order(
+        client_ref=data.client_ref,
+        partner_id=partner_id,
+        manager_id=data.manager_id,
+        status="new",
+        number=f"tmp-{uuid.uuid4().hex[:8]}",
+        total_amount=total,
+        items=order_items,
+    )
+    db.add(order)
+    await db.flush()  # assigns order.id
+
     order.number = f"ORD-{datetime.now(timezone.utc).year}-{order.id:05d}"
     await db.commit()
 
