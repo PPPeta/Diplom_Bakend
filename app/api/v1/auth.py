@@ -5,11 +5,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.db.session import get_core_session
+from app.db.session import get_analytics_session, get_core_session
 from app.models.user import User
 from app.schemas.auth import RefreshRequest, Token
 from app.schemas.user import UserRead, UserRegister
-from app.services import auth_service
+from app.services import audit_service, auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -37,6 +37,7 @@ async def register(
 async def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_core_session)],
+    audit_db: Annotated[AsyncSession, Depends(get_analytics_session)],
 ) -> Token:
     user = await auth_service.authenticate(db, form.username, form.password)
     if user is None:
@@ -50,6 +51,14 @@ async def login(
         )
     access, refresh = await auth_service.issue_tokens(
         user.id, user.role.code, user.partner_id
+    )
+    # Пишем в аудит факт успешного входа.
+    await audit_service.write_log(
+        audit_db,
+        action="auth.login",
+        user_id=user.id,
+        user_role=user.role.code,
+        details="успешный вход",
     )
     return Token(access_token=access, refresh_token=refresh)
 
@@ -70,8 +79,19 @@ async def refresh(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(user: Annotated[User, Depends(get_current_user)]) -> None:
+async def logout(
+    user: Annotated[User, Depends(get_current_user)],
+    audit_db: Annotated[AsyncSession, Depends(get_analytics_session)],
+) -> None:
     await auth_service.revoke_all(user.id)
+    # Пишем в аудит факт выхода.
+    await audit_service.write_log(
+        audit_db,
+        action="auth.logout",
+        user_id=user.id,
+        user_role=user.role.code,
+        details="выход из системы",
+    )
 
 
 @router.get("/me", response_model=UserRead)
