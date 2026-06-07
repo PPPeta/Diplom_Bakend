@@ -14,6 +14,7 @@ from app.models.task import Task
 from app.models.document import Document
 from app.models.payment import Payment
 from app.models.message import Message
+from app.models.audit import AuditLog
 
 __all__ = [
     "Partner",
@@ -32,4 +33,5 @@ __all__ = [
     "Document",
     "Payment",
     "Message",
+    "AuditLog",
 ]
