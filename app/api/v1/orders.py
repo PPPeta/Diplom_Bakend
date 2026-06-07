@@ -4,14 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_roles
-from app.db.session import get_core_session
+from app.db.session import get_analytics_session, get_core_session
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderRead, OrderStatusUpdate
-from app.services import order_service
+from app.services import audit_service, order_service
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 DbDep = Annotated[AsyncSession, Depends(get_core_session)]
+AuditDbDep = Annotated[AsyncSession, Depends(get_analytics_session)]
 
 
 @router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
@@ -65,10 +66,13 @@ async def get_order(
 @router.patch(
     "/{order_id}/status",
     response_model=OrderRead,
-    dependencies=[Depends(require_roles("admin", "manager"))],
 )
 async def change_order_status(
-    order_id: int, data: OrderStatusUpdate, db: DbDep
+    order_id: int,
+    data: OrderStatusUpdate,
+    db: DbDep,
+    audit_db: AuditDbDep,
+    user: Annotated[User, Depends(require_roles("admin", "manager"))],
 ) -> OrderRead:
     order = await order_service.get_order(db, order_id)
     if order is None:
@@ -76,8 +80,19 @@ async def change_order_status(
             status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
         )
     try:
-        return await order_service.change_status(db, order, data.status)
+        updated = await order_service.change_status(db, order, data.status)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         )
+    # Пишем в аудит: кто и на какой статус перевёл заказ.
+    await audit_service.write_log(
+        audit_db,
+        action="order.status_changed",
+        user_id=user.id,
+        user_role=user.role.code,
+        entity_type="order",
+        entity_id=order.id,
+        details=f"новый статус: {data.status}",
+    )
+    return updated
