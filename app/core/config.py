@@ -1,6 +1,16 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Секреты, которые недопустимы вне режима отладки.
+_INSECURE_JWT_SECRETS = {
+    "",
+    "change-me-in-production",
+    "changeme",
+    "secret",
+    "test",
+}
 
 
 class Settings(BaseSettings):
@@ -37,6 +47,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
 
     # JWT
+    # В продакшене ОБЯЗАТЕЛЬНО переопределить через переменную окружения JWT_SECRET_KEY.
+    # Дефолт используется только в dev/debug — в проде валидатор ниже не даст запуститься.
     JWT_SECRET_KEY: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -47,6 +59,26 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     # Длина окна в секундах.
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    @property
+    def is_production(self) -> bool:
+        # Продакшен, если явно указано окружение или отключён DEBUG.
+        return (
+            self.APP_ENV.strip().lower() in {"production", "prod", "staging"}
+            or not self.DEBUG
+        )
+
+    @model_validator(mode="after")
+    def _enforce_secure_secret(self) -> "Settings":
+        if self.is_production:
+            secret = (self.JWT_SECRET_KEY or "").strip()
+            if secret.lower() in _INSECURE_JWT_SECRETS or len(secret) < 32:
+                raise ValueError(
+                    "JWT_SECRET_KEY должен быть задан надёжным уникальным значением "
+                    "(не менее 32 символов) вне режима отладки. "
+                    "Установите переменную окружения JWT_SECRET_KEY."
+                )
+        return self
 
     @property
     def cors_origins(self) -> list[str]:
