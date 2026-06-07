@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_roles
+from app.core.deps import require_roles
 from app.db.session import get_core_session
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderRead, OrderStatusUpdate
@@ -12,6 +12,11 @@ from app.services import order_service
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 DbDep = Annotated[AsyncSession, Depends(get_core_session)]
+# Заказы содержат ПД клиентов — доступ только у персонала и партнёров (свои).
+# Исполнители работают через /tasks и заказы целиком не видят.
+OrderViewer = Annotated[
+    User, Depends(require_roles("admin", "manager", "partner"))
+]
 
 
 @router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
@@ -36,7 +41,7 @@ async def create_order(
 @router.get("", response_model=list[OrderRead])
 async def list_orders(
     db: DbDep,
-    user: Annotated[User, Depends(get_current_user)],
+    user: OrderViewer,
 ) -> list[OrderRead]:
     # Partners see only their own orders; staff sees everything.
     if user.role.code == "partner":
@@ -48,7 +53,7 @@ async def list_orders(
 async def get_order(
     order_id: int,
     db: DbDep,
-    user: Annotated[User, Depends(get_current_user)],
+    user: OrderViewer,
 ) -> OrderRead:
     order = await order_service.get_order(db, order_id)
     if order is None:

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import require_roles
 from app.db.session import get_core_session
 from app.models.order import Order
 from app.models.user import User
@@ -13,7 +13,11 @@ from app.services import message_service, order_service
 router = APIRouter(prefix="/orders/{order_id}/messages", tags=["messages"])
 
 DbDep = Annotated[AsyncSession, Depends(get_core_session)]
-UserDep = Annotated[User, Depends(get_current_user)]
+# Обсуждение заказа — переписка клиента и персонала.
+# Исполнители к ней доступа не имеют (работают через /tasks).
+UserDep = Annotated[
+    User, Depends(require_roles("admin", "manager", "partner"))
+]
 
 
 async def _order_or_error(db: AsyncSession, order_id: int, user: User) -> Order:
