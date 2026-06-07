@@ -51,12 +51,15 @@ async def list_orders(
 async def create_order(
     db: AsyncSession, data: OrderCreate, partner_id: int | None
 ) -> Order:
+    # Колонка number ограничена VARCHAR(32). Финальный номер вида
+    # ORD-2026-00001 короткий, но временный нужен только до получения id,
+    # поэтому берём короткий кусок uuid (tmp-xxxxxxxx = 12 символов).
     order = Order(
         client_ref=data.client_ref,
         partner_id=partner_id,
         manager_id=data.manager_id,
         status="new",
-        number=f"tmp-{uuid.uuid4().hex}",
+        number=f"tmp-{uuid.uuid4().hex[:8]}",
         total_amount=Decimal("0.00"),
     )
     db.add(order)

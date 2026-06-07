@@ -10,7 +10,7 @@ from app.db.session import get_core_session
 from app.models.user import User
 from app.schemas.auth import RefreshRequest, Token
 from app.schemas.user import PasswordChange, ProfileUpdate, UserRead, UserRegister
-from app.services import auth_service
+from app.services import audit_service, auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -68,6 +68,15 @@ async def login(
         )
     access, refresh = await auth_service.issue_tokens(
         user.id, user.role.code, user.partner_id
+    )
+    # Пишем вход в аудит-лог.
+    await audit_service.log_event(
+        action="auth.login",
+        user_id=user.id,
+        user_role=user.role.code,
+        entity_type="user",
+        entity_id=user.id,
+        details=user.email,
     )
     return Token(access_token=access, refresh_token=refresh)
 
