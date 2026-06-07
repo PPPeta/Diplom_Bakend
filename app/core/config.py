@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Rate limiting (login)
+    # Максимум попыток входа с одного IP за окно.
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
+    # Длина окна в секундах.
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.BACKEND_CORS_ORIGINS.split(",") if o.strip()]
