@@ -19,6 +19,17 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
     full_name: str
+    phone: str | None = None
     role: str
     partner_id: int | None = None
     is_active: bool
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    phone: str | None = Field(default=None, max_length=32)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)

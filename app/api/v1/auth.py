@@ -9,10 +9,22 @@ from app.core.rate_limit import rate_limit_login
 from app.db.session import get_core_session
 from app.models.user import User
 from app.schemas.auth import RefreshRequest, Token
-from app.schemas.user import UserRead, UserRegister
+from app.schemas.user import PasswordChange, ProfileUpdate, UserRead, UserRegister
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _user_read(user: User) -> UserRead:
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        phone=user.phone,
+        role=user.role.code,
+        partner_id=user.partner_id,
+        is_active=user.is_active,
+    )
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -28,6 +40,7 @@ async def register(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
+        phone=user.phone,
         role="partner",
         partner_id=user.partner_id,
         is_active=user.is_active,
@@ -81,11 +94,32 @@ async def logout(user: Annotated[User, Depends(get_current_user)]) -> None:
 
 @router.get("/me", response_model=UserRead)
 async def me(user: Annotated[User, Depends(get_current_user)]) -> UserRead:
-    return UserRead(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role.code,
-        partner_id=user.partner_id,
-        is_active=user.is_active,
+    return _user_read(user)
+
+
+@router.patch("/me", response_model=UserRead)
+async def update_me(
+    data: ProfileUpdate,
+    db: Annotated[AsyncSession, Depends(get_core_session)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> UserRead:
+    updated = await auth_service.update_profile(
+        db, user, full_name=data.full_name, phone=data.phone
     )
+    return _user_read(updated)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    data: PasswordChange,
+    db: Annotated[AsyncSession, Depends(get_core_session)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    try:
+        await auth_service.change_password(
+            db, user, data.current_password, data.new_password
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        )

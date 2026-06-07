@@ -94,3 +94,33 @@ async def register_partner(db: AsyncSession, data: UserRegister) -> User:
     await db.commit()
     await db.refresh(user)
     return user
+
+
+async def update_profile(
+    db: AsyncSession,
+    user: User,
+    *,
+    full_name: str | None = None,
+    phone: str | None = None,
+) -> User:
+    if full_name is not None:
+        user.full_name = full_name
+    if phone is not None:
+        user.phone = phone
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def change_password(
+    db: AsyncSession,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> None:
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("current password is incorrect")
+    user.password_hash = hash_password(new_password)
+    await db.commit()
+    # Invalidate existing refresh tokens after a password change.
+    await revoke_all(user.id)
