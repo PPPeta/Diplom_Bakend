@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class PartnerRegister(BaseModel):
@@ -9,7 +9,9 @@ class PartnerRegister(BaseModel):
 
 
 class UserRegister(BaseModel):
-    email: EmailStr
+    # Используем обычную строку, а не EmailStr: внутренние/тестовые домены
+    # вроде admin@vp.local pydantic считает невалидными и роняет ответ.
+    email: str
     password: str = Field(min_length=8)
     full_name: str
     partner: PartnerRegister
@@ -17,7 +19,7 @@ class UserRegister(BaseModel):
 
 class UserRead(BaseModel):
     id: int
-    email: EmailStr
+    email: str
     full_name: str
     phone: str | None = None
     role: str
@@ -45,7 +47,7 @@ class UserAdminUpdate(BaseModel):
 class UserCreate(BaseModel):
     """Administrative creation of a user (staff member or partner contact)."""
 
-    email: EmailStr
+    email: str
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
     phone: str | None = Field(default=None, max_length=32)

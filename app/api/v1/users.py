@@ -7,7 +7,7 @@ from app.core.deps import require_roles
 from app.db.session import get_core_session
 from app.models.user import User
 from app.schemas.user import UserAdminUpdate, UserCreate, UserRead
-from app.services import user_service
+from app.services import audit_service, user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -39,7 +39,7 @@ async def list_users(
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-async def create_user(data: UserCreate, db: DbDep, _: AdminDep) -> UserRead:
+async def create_user(data: UserCreate, db: DbDep, admin: AdminDep) -> UserRead:
     try:
         user = await user_service.create_user(
             db,
@@ -54,6 +54,14 @@ async def create_user(data: UserCreate, db: DbDep, _: AdminDep) -> UserRead:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         )
+    await audit_service.log_event(
+        action="user.created",
+        user_id=admin.id,
+        user_role="admin",
+        entity_type="user",
+        entity_id=user.id,
+        details=f"{user.email} ({data.role_code})",
+    )
     return _read(user)
 
 
@@ -89,4 +97,12 @@ async def update_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         )
+    await audit_service.log_event(
+        action="user.updated",
+        user_id=admin.id,
+        user_role="admin",
+        entity_type="user",
+        entity_id=user.id,
+        details=f"is_active={user.is_active}, role={user.role.code if user.role else ''}",
+    )
     return _read(user)
