@@ -4,6 +4,7 @@ from app.api.v1 import (
     audit,
     auth,
     health,
+    messages,
     orders,
     payments,
     requests,
@@ -17,6 +18,7 @@ api_router.include_router(auth.router)
 api_router.include_router(services.router)
 api_router.include_router(requests.router)
 api_router.include_router(orders.router)
+api_router.include_router(messages.router)
 api_router.include_router(tasks.router)
 api_router.include_router(payments.router)
 api_router.include_router(audit.router)
