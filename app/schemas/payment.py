@@ -17,6 +17,12 @@ class PaymentStatusUpdate(BaseModel):
     status: Literal["pending", "paid"]
 
 
+class YooKassaCheckoutCreate(BaseModel):
+    """Запрос на создание оплаты заказа через ЮKassa."""
+
+    order_id: int
+
+
 class PaymentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -27,5 +33,9 @@ class PaymentRead(BaseModel):
     direction: str
     kind: str
     status: str
+    provider: str | None = None
+    external_id: str | None = None
+    confirmation_url: str | None = None
+    description: str | None = None
     paid_at: datetime | None = None
     created_at: datetime
