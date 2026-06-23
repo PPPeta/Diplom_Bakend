@@ -7,7 +7,7 @@ from app.core.deps import require_roles
 from app.db.session import get_core_session
 from app.models.user import User
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
-from app.services import task_service
+from app.services import order_service, task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -24,6 +24,14 @@ StaffOrExecutor = Annotated[
     dependencies=[Depends(require_roles("admin", "manager"))],
 )
 async def create_task(data: TaskCreate, db: DbDep) -> TaskRead:
+    # Проверяем, что заказ существует. Иначе INSERT упадёт с нарушением
+    # внешнего ключа tasks_order_id_fkey и вернётся 500. Возвращаем понятный 404.
+    order = await order_service.get_order(db, data.order_id)
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Order {data.order_id} not found",
+        )
     return await task_service.create_task(db, data)
 
 
