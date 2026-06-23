@@ -64,7 +64,8 @@ async def login(
         )
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Пользователь заблокирован",
         )
     access, refresh = await auth_service.issue_tokens(
         user.id, user.role.code, user.partner_id
