@@ -12,7 +12,6 @@ from app.services import audit_service, user_service
 router = APIRouter(prefix="/users", tags=["users"])
 
 DbDep = Annotated[AsyncSession, Depends(get_core_session)]
-AdminDep = Annotated[User, Depends(require_roles("admin"))]
 AdminOrManagerDep = Annotated[User, Depends(require_roles("admin", "manager"))]
 
 
@@ -35,23 +34,20 @@ async def list_users(
     role: str | None = None,
     partner_id: int | None = None,
 ) -> list[UserRead]:
-    # Менеджеру нужен только список исполнителей для назначения задач.
-    # Поэтому даём доступ менеджеру, но ограничиваем выборку.
+    # Manager is allowed to fetch only executors (for task assignment UI).
     if actor.role.code == "manager":
-        if role not in (None, "executor"):
+        if role != "executor" or partner_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Managers may only list executors",
+                detail="Insufficient role permissions",
             )
-        role = "executor"
-        partner_id = None
 
     users = await user_service.list_users(db, role=role, partner_id=partner_id)
     return [_read(u) for u in users]
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-async def create_user(data: UserCreate, db: DbDep, admin: AdminDep) -> UserRead:
+async def create_user(data: UserCreate, db: DbDep, admin: Annotated[User, Depends(require_roles("admin"))]) -> UserRead:
     try:
         user = await user_service.create_user(
             db,
@@ -78,7 +74,7 @@ async def create_user(data: UserCreate, db: DbDep, admin: AdminDep) -> UserRead:
 
 
 @router.get("/{user_id}", response_model=UserRead)
-async def get_user(user_id: int, db: DbDep, _: AdminDep) -> UserRead:
+async def get_user(user_id: int, db: DbDep, _: Annotated[User, Depends(require_roles("admin"))]) -> UserRead:
     user = await user_service.get_user(db, user_id)
     if user is None:
         raise HTTPException(
@@ -89,7 +85,10 @@ async def get_user(user_id: int, db: DbDep, _: AdminDep) -> UserRead:
 
 @router.patch("/{user_id}", response_model=UserRead)
 async def update_user(
-    user_id: int, data: UserAdminUpdate, db: DbDep, admin: AdminDep
+    user_id: int,
+    data: UserAdminUpdate,
+    db: DbDep,
+    admin: Annotated[User, Depends(require_roles("admin"))],
 ) -> UserRead:
     user = await user_service.get_user(db, user_id)
     if user is None:
