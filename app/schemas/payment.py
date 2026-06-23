@@ -33,9 +33,9 @@ class PaymentRead(BaseModel):
     direction: str
     kind: str
     status: str
-    paid_at: datetime | None = None
-    created_at: datetime
     provider: str | None = None
     external_id: str | None = None
     confirmation_url: str | None = None
     description: str | None = None
+    paid_at: datetime | None = None
+    created_at: datetime

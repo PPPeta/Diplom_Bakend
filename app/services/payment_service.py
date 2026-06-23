@@ -60,10 +60,10 @@ async def set_status(db: AsyncSession, payment: Payment, status: str) -> Payment
 async def create_yookassa_checkout(
     db: AsyncSession, order: Order, return_url: str
 ) -> Payment:
-    """Создаёт локальный платёж и платёж в ЮKassa, возвращает его со ссылкой на оплату.
+    """Создаёт локальный платёж и платёж в ЮKassa, возвращает платёж с ссылкой на оплату.
 
-    Значения заказа фиксируем сразу в локальные переменные, чтобы не
-    обращаться к ленивым связям после commit (иначе MissingGreenlet).
+    Значения заказа фиксируем в локальные переменные ДО commit, чтобы не
+    дёргать ленивые связи на уже сохранённом объекте (иначе MissingGreenlet).
     """
     amount = order.total_amount
     order_id = order.id
@@ -96,15 +96,13 @@ async def create_yookassa_checkout(
             metadata={"order_id": str(order_id), "payment_id": str(local_id)},
         )
     except Exception:
-        # Платёж в ЮKassa не создан — откатываем локальную запись.
         await db.rollback()
         raise
 
     payment.external_id = result.get("id")
     payment.confirmation_url = result.get("confirmation_url")
-    # Если провайдер сразу вернул финальный статус — отразим его.
-    mapped = _YK_STATUS_MAP.get(result.get("status") or "")
-    if mapped == "paid":
+    # Если ЮKassa сразу вернула финальный статус — отразим его локально.
+    if _YK_STATUS_MAP.get(result.get("status") or "") == "paid":
         payment.status = "paid"
         payment.paid_at = datetime.now(timezone.utc)
     await db.commit()
@@ -129,7 +127,7 @@ async def sync_yookassa_payment(
     elif mapped == "canceled":
         payment.status = "canceled"
         payment.paid_at = None
-    # pending / waiting_for_capture — статус не меняем.
+    # pending / waiting_for_capture — оставляем как есть.
     await db.commit()
     await db.refresh(payment)
     return payment

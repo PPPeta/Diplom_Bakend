@@ -61,12 +61,11 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # YooKassa (https://yookassa.ru) — тестовый магазин.
-    # Значения берём из личного кабинета магазина (shopId + секретный ключ).
-    # Если не заданы — приём оплаты через ЮKassa отключён (эндпоинты вернут 503).
+    # Задаются через переменные окружения. Пустые значения = приём оплаты выключен.
     YOOKASSA_SHOP_ID: str = ""
     YOOKASSA_SECRET_KEY: str = ""
-    # Куда ЮKassa вернёт пользователя после оплаты (страница магазина).
-    YOOKASSA_RETURN_URL: str = "http://localhost:5500/index.html"
+    # Куда ЮKassa вернёт пользователя после оплаты (страница фронтенда).
+    YOOKASSA_RETURN_URL: str = "http://localhost:5500/client/payments.html"
     YOOKASSA_CURRENCY: str = "RUB"
 
     @property
@@ -95,7 +94,7 @@ class Settings(BaseSettings):
 
     @property
     def yookassa_enabled(self) -> bool:
-        # Приём оплаты возможен только при заданных учётных данных магазина.
+        # Приём оплаты доступен только когда заданы идентификатор магазина и ключ.
         return bool(self.YOOKASSA_SHOP_ID and self.YOOKASSA_SECRET_KEY)
 
     @property

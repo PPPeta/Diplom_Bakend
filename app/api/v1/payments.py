@@ -39,9 +39,10 @@ async def create_payment(data: PaymentCreate, db: DbDep) -> PaymentRead:
     response_model=PaymentRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def yookassa_checkout(
+async def create_yookassa_checkout(
     data: YooKassaCheckoutCreate, db: DbDep, user: FinanceViewer
 ) -> PaymentRead:
+    """Создаёт оплату заказа через ЮKassa и возвращает ссылку на оплату."""
     if not settings.yookassa_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -52,7 +53,7 @@ async def yookassa_checkout(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
         )
-    # Партнёр может оплачивать только собственные заказы.
+    # Партнёр может оплачивать только свои заказы.
     if user.role.code == "partner" and order.partner_id != user.partner_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden"
@@ -125,9 +126,10 @@ async def update_payment_status(
 
 
 @router.post("/{payment_id}/yookassa/sync", response_model=PaymentRead)
-async def yookassa_sync(
+async def sync_yookassa_payment(
     payment_id: int, db: DbDep, user: FinanceViewer
 ) -> PaymentRead:
+    """Опрашивает статус платежа в ЮKassa и обновляет локальный платёж."""
     payment = await payment_service.get_payment(db, payment_id)
     if payment is None:
         raise HTTPException(
