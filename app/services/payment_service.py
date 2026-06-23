@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order
@@ -15,6 +15,10 @@ _YK_STATUS_MAP = {
     "pending": "pending",
     "waiting_for_capture": "pending",
 }
+
+
+class OrderAlreadyPaidError(RuntimeError):
+    """Заказ уже полностью оплачен — повторная оплата не требуется."""
 
 
 async def create_payment(db: AsyncSession, data: PaymentCreate) -> Payment:
@@ -49,6 +53,16 @@ async def get_payment(db: AsyncSession, payment_id: int) -> Payment | None:
     return await db.get(Payment, payment_id)
 
 
+async def order_paid_total(db: AsyncSession, order_id: int):
+    """Сумма успешно проведённых входящих платежей по заказу."""
+    stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
+        Payment.order_id == order_id,
+        Payment.direction == "in",
+        Payment.status == "paid",
+    )
+    return (await db.execute(stmt)).scalar_one()
+
+
 async def set_status(db: AsyncSession, payment: Payment, status: str) -> Payment:
     payment.status = status
     payment.paid_at = datetime.now(timezone.utc) if status == "paid" else None
@@ -72,6 +86,11 @@ async def create_yookassa_checkout(
 
     if amount is None or amount <= 0:
         raise ValueError("Сумма заказа должна быть больше нуля")
+
+    # Не даём оплатить заказ повторно, если он уже оплачен на полную сумму.
+    paid_sum = await order_paid_total(db, order_id)
+    if paid_sum >= amount:
+        raise OrderAlreadyPaidError("Заказ уже полностью оплачен")
 
     description = f"Оплата заказа {number}"
     payment = Payment(
