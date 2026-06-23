@@ -12,4 +12,5 @@ class PartnerRead(BaseModel):
     type: str
     contract_no: str | None = None
     status: str
+    price_list_id: int | None = None
     created_at: datetime

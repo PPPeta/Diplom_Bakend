@@ -9,6 +9,7 @@ from app.api.v1 import (
     orders,
     partners,
     payments,
+    pricing,
     requests,
     roles,
     services,
@@ -29,4 +30,5 @@ api_router.include_router(documents.router)
 api_router.include_router(users.router)
 api_router.include_router(roles.router)
 api_router.include_router(partners.router)
+api_router.include_router(pricing.router)
 api_router.include_router(audit.router)
