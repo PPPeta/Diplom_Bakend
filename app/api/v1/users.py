@@ -13,6 +13,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 DbDep = Annotated[AsyncSession, Depends(get_core_session)]
 AdminDep = Annotated[User, Depends(require_roles("admin"))]
+AdminOrManagerDep = Annotated[User, Depends(require_roles("admin", "manager"))]
 
 
 def _read(u: User) -> UserRead:
@@ -30,10 +31,21 @@ def _read(u: User) -> UserRead:
 @router.get("", response_model=list[UserRead])
 async def list_users(
     db: DbDep,
-    _: AdminDep,
+    actor: AdminOrManagerDep,
     role: str | None = None,
     partner_id: int | None = None,
 ) -> list[UserRead]:
+    # Менеджеру нужен только список исполнителей для назначения задач.
+    # Поэтому даём доступ менеджеру, но ограничиваем выборку.
+    if actor.role.code == "manager":
+        if role not in (None, "executor"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Managers may only list executors",
+            )
+        role = "executor"
+        partner_id = None
+
     users = await user_service.list_users(db, role=role, partner_id=partner_id)
     return [_read(u) for u in users]
 
