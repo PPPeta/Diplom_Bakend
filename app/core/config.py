@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     # Длина окна в секундах.
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # YooKassa (https://yookassa.ru) — тестовый магазин.
+    # Значения берём из личного кабинета магазина (shopId + секретный ключ).
+    # Если не заданы — приём оплаты через ЮKassa отключён (эндпоинты вернут 503).
+    YOOKASSA_SHOP_ID: str = ""
+    YOOKASSA_SECRET_KEY: str = ""
+    # Куда ЮKassa вернёт пользователя после оплаты (страница магазина).
+    YOOKASSA_RETURN_URL: str = "http://localhost:5500/index.html"
+    YOOKASSA_CURRENCY: str = "RUB"
+
     @property
     def is_production(self) -> bool:
         # Продакшен, если явно указано окружение или отключён DEBUG.
@@ -83,6 +92,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.BACKEND_CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def yookassa_enabled(self) -> bool:
+        # Приём оплаты возможен только при заданных учётных данных магазина.
+        return bool(self.YOOKASSA_SHOP_ID and self.YOOKASSA_SECRET_KEY)
 
     @property
     def core_db_url(self) -> str:
