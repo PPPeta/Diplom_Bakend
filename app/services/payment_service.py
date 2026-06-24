@@ -53,8 +53,8 @@ async def get_payment(db: AsyncSession, payment_id: int) -> Payment | None:
     return await db.get(Payment, payment_id)
 
 
-async def order_paid_total(db: AsyncSession, order_id: int):
-    """Сумма успешно проведённых входящих платежей по заказу."""
+async def _order_paid_total(db: AsyncSession, order_id: int):
+    """Сумма успешно прошедших входящих оплат по заказу."""
     stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
         Payment.order_id == order_id,
         Payment.direction == "in",
@@ -87,9 +87,9 @@ async def create_yookassa_checkout(
     if amount is None or amount <= 0:
         raise ValueError("Сумма заказа должна быть больше нуля")
 
-    # Не даём оплатить заказ повторно, если он уже оплачен на полную сумму.
-    paid_sum = await order_paid_total(db, order_id)
-    if paid_sum >= amount:
+    # Не создаём новую оплату, если заказ уже полностью оплачен.
+    paid_total = await _order_paid_total(db, order_id)
+    if paid_total >= amount:
         raise OrderAlreadyPaidError("Заказ уже полностью оплачен")
 
     description = f"Оплата заказа {number}"
